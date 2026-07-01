@@ -15,25 +15,10 @@ first costs nothing extra and removes that risk entirely.
 
 ## Part 0 — Which shape to use
 
-Two Always Free options, real tradeoff between them, worth deciding before
-you start rather than mid-setup:
-
-**VM.Standard.A1.Flex (Ampere ARM)** — as of June 2026, free tier accounts
-get 2 OCPUs / 12 GB total (down from 4/24 previously; Pay-As-You-Go
-accounts with a card on file may still get the higher limit). Plenty of
-headroom for this app, no OOM risk. The catch: it's frequently unavailable
-("out of host capacity") in busy regions and availability domains. If your
-first attempt fails, try a different availability domain, or a nearby
-region, or just retry every few minutes.
-
-**VM.Standard.E2.1.Micro (AMD)** — 1/8 OCPU, 1 GB RAM. This is the
-memory-constrained shape that caused the OOM issue on the old VM. More
-reliably available, but you'll need the same swapfile fix as before, and
-it's tighter even with that.
-
-**Recommendation:** try A1.Flex first, with 1 OCPU / 6 GB (no need for the
-full 2/12 for this app). Fall back to E2.1.Micro + swapfile only if A1.Flex
-capacity genuinely isn't available in your region after a few retries.
+**Decided: VM.Standard.E2.1.Micro (AMD)**, since A1.Flex hit "out of host
+capacity" in the available availability domain. 1/8 OCPU, 1 GB RAM — the
+same constrained shape as the old VM, so Part 4's swapfile step is now
+required, not optional, and the rest of this guide assumes this shape.
 
 ---
 
@@ -90,7 +75,9 @@ ssh -i ~/.ssh/oci-agentic-workflow opc@<new-public-ip>
 
 ## Part 4 — Base setup
 
-Swapfile (worth having regardless of shape, cheap insurance):
+You're on E2.1.Micro (1 GB RAM) — the swapfile below isn't optional this
+time, skipping it is what caused the OOM issue on the old VM. Do this
+before installing anything else:
 
 ```bash
 sudo fallocate -l 2G /swapfile
@@ -98,18 +85,13 @@ sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h   # confirm swap shows up before continuing
 ```
 
-Node.js — via NodeSource's RPM setup script:
-
-```bash
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo dnf install -y nodejs
-node -v
-```
-
-If you ended up on E2.1.Micro instead and want to avoid any build/compile
-step during install, use the binary tarball approach instead:
+Node.js — use the binary tarball, not the NodeSource script or dnf module.
+It's the difference between copying pre-built binaries into place versus
+`dnf` resolving and staging a full dependency tree, which is the kind of
+memory pressure that caused trouble last time on this exact shape:
 
 ```bash
 cd ~
