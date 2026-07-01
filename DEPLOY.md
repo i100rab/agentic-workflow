@@ -1,17 +1,159 @@
-# Deploying the web console to OCI
+# Deploying the Agentic Workflow Web Console on OCI
 
-This replaces the previous "ANZ Strategic Advisory Deals" dashboard on the
-same Always Free VM. The agents themselves (`src/agents/*.js`) are untouched
-from the GitHub version — this only adds `server.js` and `web/` on top.
+This replaces the previous "ANZ Strategic Advisory Deals" dashboard on your
+existing OCI Always Free compute instance with the new live agent console.
+Same VM, same general pattern (nginx in front, Node app behind it, HTTPS via
+Let's Encrypt), new application.
 
-## 0. Remove the old dashboard first
+Request flow once this is live:
 
-SSH into the VM and stop whatever was serving the old React/Express dashboard
-(pm2 process, systemd service, or manual node process — whichever you used).
-Free up the port it was running on, and remove or comment out its nginx
-server block so it doesn't conflict with the new one below.
+```
+Browser → OCI Security List (80/443) → nginx (TLS + Basic Auth) → pm2/Node on :3001 → Anthropic API
+```
 
-## 1. Get the code onto the VM
+---
+
+## Part 1 — OCI resources: what you need
+
+You already have the compute instance from the previous dashboard, so this
+is mostly verification, not provisioning.
+
+**Compute instance.** The Always Free shape (VM.Standard.E2.1.Micro or
+VM.Standard.A1.Flex on the Ampere free tier) you're already running. No
+change needed here.
+
+**VCN Security List.** This is the one thing worth re-checking before you
+start, since it's the most common cause of "it deployed fine but I can't
+reach it." In the OCI Console:
+
+`Networking → Virtual Cloud Networks → (your VCN) → Security Lists → Default Security List`
+
+Confirm ingress rules exist for:
+- TCP 22 (SSH) — should already be there
+- TCP 80 (HTTP) — needed for Let's Encrypt's renewal challenge and the redirect to HTTPS
+- TCP 443 (HTTPS) — the actual app traffic
+
+If 80/443 aren't listed, add them (source CIDR `0.0.0.0/0`, destination port
+range matching each).
+
+**Nothing else.** No load balancer, no Object Storage, no database — this
+app is a single Node process with in-memory state, so the VM is the whole
+stack. If you later want run history to survive a restart, that's a future
+add (SQLite on the same VM would be the lightest option), not something
+needed for a live demo.
+
+---
+
+## Part 2 — Get the code onto GitHub
+
+The web console code isn't pushed yet. Fastest path: generate a fresh
+fine-grained personal access token the same way as before (Settings →
+Developer settings → Personal access tokens → Fine-grained tokens, scoped
+to just this repo, Contents: Read and write) and send it over, and I'll
+push directly. Revoke it again once it's done.
+
+If you'd rather not, unzip the project bundle directly on the VM once
+you're SSHed in (Part 6 below covers this) and push from there instead —
+that avoids sharing a token with me at all.
+
+---
+
+## Part 3 — SSH into the VM
+
+```bash
+ssh <your-user>@<your-oci-public-ip>
+```
+
+---
+
+## Part 4 — Remove the old dashboard completely
+
+Don't guess at how it was left running — check directly.
+
+```bash
+# Running under pm2?
+pm2 list
+
+# A systemd service?
+systemctl list-units --type=service --all | grep -i -E "dashboard|node|express"
+
+# What's actually listening on web ports?
+sudo ss -tlnp | grep -E ":80|:443|:3000|:3001|:5000|:8080"
+```
+
+Stop whatever shows up:
+
+```bash
+pm2 delete <old-process-name>
+# or
+sudo systemctl stop <old-service-name>
+sudo systemctl disable <old-service-name>
+```
+
+Remove the old nginx server block:
+
+```bash
+ls /etc/nginx/sites-enabled/
+ls /etc/nginx/conf.d/
+sudo rm /etc/nginx/sites-enabled/old-dashboard.conf   # adjust filename
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Move the old app folder aside rather than deleting outright, until the new
+one is confirmed working:
+
+```bash
+cd ~
+mv old-dashboard-folder old-dashboard-folder.bak
+```
+
+---
+
+## Part 5 — Prepare the Node.js environment
+
+The OOM issue last time was fixed with the Node binary tarball plus a
+swapfile. If that swapfile is still active, skip to the version check. If
+you're unsure:
+
+```bash
+swapon --show
+free -h
+```
+
+If nothing shows under swap, recreate it (2GB is enough for this app):
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+Confirm Node is available and reasonably current (v18+):
+
+```bash
+node -v
+```
+
+If it's missing or too old, install via the binary tarball approach that
+worked before rather than a package manager, to sidestep the OOM issue
+during compilation:
+
+```bash
+cd ~
+wget https://nodejs.org/dist/latest-v20.x/node-v20.*-linux-x64.tar.xz
+tar -xf node-v20.*-linux-x64.tar.xz
+sudo cp -r node-v20.*-linux-x64/{bin,lib,include,share} /usr/local/
+node -v
+```
+
+---
+
+## Part 6 — Get the code onto the VM
+
+If Part 2 is done and the repo is pushed:
 
 ```bash
 cd ~
@@ -19,45 +161,64 @@ git clone https://github.com/i100rab/agentic-workflow.git
 cd agentic-workflow
 ```
 
-If you already have a local clone from before, `git pull` instead.
+If you already have a clone from earlier, `git pull` instead. If you're
+pushing from the VM itself instead of via GitHub, unzip the bundle here,
+`cd` into it, and run `git remote add origin ...` / `git push` as covered
+earlier, then continue below.
 
-## 2. Install dependencies
+---
 
-Same Node setup that fixed the OOM issue last time (binary tarball + swapfile)
-applies here too — this project is lighter than the Vite-based dashboard
-since there's no frontend build step, but keep the swapfile in place regardless:
+## Part 7 — Install dependencies
 
 ```bash
 npm install --production
 ```
 
-## 3. Add your API key
+No frontend build step here (the console is plain HTML/JS, no React/Vite),
+so this should be lighter and faster than the old dashboard's install.
+
+---
+
+## Part 8 — Configure environment variables
 
 ```bash
 cp .env.example .env
-nano .env   # paste your ANTHROPIC_API_KEY
+nano .env
 ```
 
-## 4. Keep it running with pm2
+Paste in `ANTHROPIC_API_KEY=sk-ant-...` and save.
+
+---
+
+## Part 9 — Run it persistently with pm2
 
 ```bash
-npm install -g pm2
+sudo npm install -g pm2
 pm2 start server.js --name agentic-workflow-web
 pm2 save
-pm2 startup   # follow the printed instructions to survive reboots
+pm2 startup
 ```
 
-The app listens on port 3001 by default (override with `PORT=xxxx` in `.env`).
+`pm2 startup` prints a command tailored to your system, run it as instructed
+so the app survives a VM reboot.
 
-## 5. nginx reverse proxy
+The app listens on port 3001 by default. Confirm it's up before touching
+nginx:
 
-This is the one place this setup differs from the old dashboard: the live
-console uses Server-Sent Events (SSE) for the progress stream, and nginx
-buffers responses by default, which will make the stream appear to hang
-until it's fully buffered. Two things fix that.
+```bash
+curl -I http://localhost:3001
+```
 
-Create (or edit) the server block, reusing whatever domain/sslip.io hostname
-and certbot cert you had for the old dashboard:
+You should see a `200 OK`.
+
+---
+
+## Part 10 — nginx reverse proxy
+
+The one real difference from the old dashboard: this app streams live
+progress over Server-Sent Events, and nginx buffers responses by default,
+which makes the stream appear frozen until it's fully buffered. The config
+below explicitly disables buffering on that route.
 
 ```nginx
 server {
@@ -95,41 +256,106 @@ server {
 }
 ```
 
-Reuse the same `.htpasswd` file from the old dashboard if you want the same
-login, or generate a new one:
+Save this as `/etc/nginx/sites-available/agentic-workflow.conf` (or
+`conf.d/` depending on your distro) and symlink/enable it if your distro
+requires that step.
+
+Reuse the existing cert if the hostname is unchanged. If it's a new
+hostname, issue a fresh one:
+
+```bash
+sudo certbot --nginx -d your-new-hostname.sslip.io
+```
+
+Reuse the old `.htpasswd` for the same login, or create a new one:
 
 ```bash
 sudo htpasswd -c /etc/nginx/.htpasswd yourusername
 ```
 
-Then:
+Test and reload:
 
 ```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-If nginx can't reach the app (SELinux blocking the proxy, same issue as
-before):
+---
+
+## Part 11 — VM-level firewall (separate from the OCI Security List)
+
+The Security List controls traffic at the OCI network layer, but the VM's
+own OS firewall can independently block the same ports. This has caught
+people out before on OCI specifically, since Oracle Linux images ship with
+`firewalld` active by default.
+
+Check which firewall (if any) is active:
+
+```bash
+sudo systemctl status firewalld    # Oracle Linux / RHEL-based
+sudo ufw status                    # Ubuntu
+```
+
+If `firewalld` is active, open the ports:
+
+```bash
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=443/tcp
+sudo firewall-cmd --reload
+```
+
+If `ufw` is active:
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+```
+
+If nginx couldn't reach the Node app specifically (distinct from the
+browser not reaching nginx), that's usually SELinux rather than the
+firewall, same fix as before:
 
 ```bash
 sudo setsebool -P httpd_can_network_connect 1
 ```
 
-No new OCI Security List rule should be needed if 443/80 are already open
-from the previous setup.
+---
 
-## 6. Verify
+## Part 12 — Verify end to end
 
-Visit `https://your-existing-hostname.sslip.io`, log in with Basic Auth,
-enter a topic, set a budget cap, and start a run. Watch the pipeline panel
-light up stage by stage in real time.
+1. Visit `https://your-hostname.sslip.io` — you should hit the Basic Auth
+   prompt first.
+2. After logging in, you should see the console: topic field, budget cap,
+   "Start run" button.
+3. Enter a topic, set a cap (start generous, e.g. $0.50, so you see a full
+   successful run before testing the governor), click Start.
+4. Watch the pipeline panel move through Researcher → Assessor → Writer →
+   Responsible AI check → Human approval in real time, with real cost per
+   stage.
+5. Approve or send back feedback when prompted.
+6. Lower the cap and run again to confirm the governor actually halts a run.
 
-## Updating later
+---
+
+## Part 13 — Cleanup and maintenance
+
+Once you've confirmed everything works, remove the old dashboard's backup:
+
+```bash
+rm -rf ~/old-dashboard-folder.bak
+```
+
+To update after future pushes:
 
 ```bash
 cd ~/agentic-workflow
 git pull
 npm install --production
 pm2 restart agentic-workflow-web
+```
+
+To check logs if something misbehaves during a live demo:
+
+```bash
+pm2 logs agentic-workflow-web
 ```
