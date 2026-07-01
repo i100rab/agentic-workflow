@@ -44,9 +44,8 @@ In the OCI Console:
 `Compute → Instances → Create Instance`
 
 - **Name:** something identifiable, e.g. `agentic-workflow-vm`
-- **Image:** Ubuntu 22.04 (simpler package management than Oracle Linux for
-  this stack — `ufw` instead of `firewalld`, no SELinux by default, which
-  removes two of the specific issues from the last deployment)
+- **Image:** Oracle Linux 9 (this is what got selected — SELinux and
+  firewalld are active by default on this image, both covered in Part 8)
 - **Shape:** Change shape → Ampere → VM.Standard.A1.Flex → set 1 OCPU / 6 GB
   (see Part 0)
 - **Networking:** create a new VCN if you don't want to reuse the old one —
@@ -82,10 +81,10 @@ Source CIDR `0.0.0.0/0` for both, matching destination port.
 ## Part 3 — SSH in and confirm the VM is reachable
 
 ```bash
-ssh -i ~/.ssh/oci-agentic-workflow ubuntu@<new-public-ip>
+ssh -i ~/.ssh/oci-agentic-workflow opc@<new-public-ip>
 ```
 
-(Username is `ubuntu` for the Ubuntu image, `opc` for Oracle Linux.)
+(Username is `opc` for Oracle Linux images.)
 
 ---
 
@@ -101,18 +100,16 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-Node.js — on Ubuntu, the NodeSource setup script is simpler than the binary
-tarball approach used last time, and shouldn't hit the same OOM issue given
-the extra RAM on A1.Flex:
+Node.js — via NodeSource's RPM setup script:
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
 node -v
 ```
 
-If you fell back to E2.1.Micro, use the binary tarball approach instead
-(same as before) to avoid compiling anything during install:
+If you ended up on E2.1.Micro instead and want to avoid any build/compile
+step during install, use the binary tarball approach instead:
 
 ```bash
 cd ~
@@ -122,14 +119,26 @@ sudo cp -r node-v20.*-linux-x64/{bin,lib,include,share} /usr/local/
 node -v
 ```
 
-Install nginx and certbot:
+Install nginx, certbot, and htpasswd's package (`httpd-tools`, not
+`apache2-utils` on this OS family):
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y nginx certbot python3-certbot-nginx apache2-utils
+sudo dnf install -y nginx httpd-tools
+sudo dnf install -y oracle-epel-release-el9
+sudo dnf install -y certbot python3-certbot-nginx
+sudo systemctl enable --now nginx
 ```
 
-(`apache2-utils` gives you `htpasswd`, needed for Part 8.)
+If `oracle-epel-release-el9` isn't found (package names shift between OL
+point releases), run `sudo dnf search epel-release` to find the correct
+name for your image, or install certbot via snap as a fallback:
+```bash
+sudo dnf install -y snapd
+sudo systemctl enable --now snapd.socket
+sudo ln -s /var/lib/snapd/snap /snap
+sudo snap install --classic certbot
+sudo ln -s /snap/bin/certbot /usr/bin/certbot
+```
 
 ---
 
@@ -254,13 +263,19 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-**Ubuntu firewall** — `ufw` may be inactive by default, but check:
+**Firewall (firewalld, active by default on Oracle Linux):**
 
 ```bash
-sudo ufw status
-# if active:
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+```
+
+**SELinux** — active by default and will block nginx from proxying to the
+Node app unless told otherwise, same issue as the old VM:
+
+```bash
+sudo setsebool -P httpd_can_network_connect 1
 ```
 
 ---
