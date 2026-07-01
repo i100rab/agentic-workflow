@@ -1,0 +1,14 @@
+{
+  "name": "agentic-workflow",
+  "version": "1.0.0",
+  "description": "5-agent pipeline: Research -> Assess -> Write -> Responsible AI check -> Human approval",
+  "type": "module",
+  "main": "run.js",
+  "scripts": {
+    "start": "node run.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "dotenv": "^16.4.5"
+  }
+}
