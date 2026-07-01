@@ -39,5 +39,5 @@ Be concise and structured. Use headers: FLAGGED ISSUES, VETTED BRIEF.`,
     .join("\n");
 
   log("Assessor", "Done.");
-  return assessment;
+  return { assessment, usage: response.usage };
 }

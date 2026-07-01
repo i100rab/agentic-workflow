@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agentic workflow — live console</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="eyebrow">Live console</div>
+        <h1>Agentic workflow</h1>
+      </div>
+      <span class="status-badge" id="statusBadge">idle</span>
+    </header>
+
+    <div class="panel" id="startPanel">
+      <h2>New run</h2>
+      <div class="start-form">
+        <textarea id="topicInput" placeholder="Topic for the essay, e.g. Green AI frameworks for enterprise data platforms"></textarea>
+        <div class="start-row">
+          <div class="field">
+            <label>Budget cap ($)</label>
+            <input type="number" id="capInput" value="0.20" step="0.05" min="0">
+          </div>
+          <button class="btn primary" id="startBtn">Start run</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="meterPanel"></div>
+
+    <div class="panel" id="pipelinePanel">
+      <h2>Pipeline</h2>
+      <div class="pipeline" id="pipeline"></div>
+    </div>
+
+    <div class="panel hidden" id="approvalPanel">
+      <h2>Awaiting your approval</h2>
+      <div class="approval-body" id="approvalEssay"></div>
+      <h2>Responsible AI report</h2>
+      <div class="rai-report" id="approvalRai"></div>
+      <div class="approval-actions">
+        <button class="btn primary" id="approveBtn">Approve</button>
+        <div class="feedback-box">
+          <textarea id="feedbackInput" placeholder="Feedback for a revision (leave blank if approving)"></textarea>
+        </div>
+        <button class="btn" id="reviseBtn">Send back for revision</button>
+        <button class="btn danger" id="stopBtn">Stop</button>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="essayPanel">
+      <h2>Final essay</h2>
+      <div class="essay-panel" id="essayText"></div>
+    </div>
+
+    <div class="panel log-panel">
+      <h2>Activity log</h2>
+      <div class="log-feed" id="logFeed"><div class="log-empty">No run started yet.</div></div>
+    </div>
+
+    <footer>Costs computed from real token usage returned by each agent call, priced at Claude Sonnet API list rates ($3 / $15 per million input/output tokens).</footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

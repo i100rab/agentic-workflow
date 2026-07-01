@@ -36,5 +36,5 @@ invent facts beyond what's in the brief.`,
     .join("\n");
 
   log("Writer", `Done. Draft is ~${essay.split(/\s+/).length} words.`);
-  return essay;
+  return { essay, usage: response.usage };
 }

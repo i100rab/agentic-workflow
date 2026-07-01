@@ -7,6 +7,34 @@ output forward. This is deliberately the simplest version of the pattern so
 you can see exactly what's happening at each step before reaching for
 something heavier (LangGraph, CrewAI, etc.) later.
 
+## Two ways to run this
+
+**CLI** (original, terminal-based approval):
+
+```bash
+node run.js "your topic"
+```
+
+**Web console** (same agents, live dashboard, browser-based approval):
+
+```bash
+npm run start:web
+```
+
+Then open `http://localhost:3001`. Enter a topic and an optional budget cap,
+and watch the five agents run in real time: a pipeline view shows each stage
+as it starts and finishes with its real token cost, a live meter tracks
+total spend against your cap, and the run halts automatically if the cap is
+crossed. The approval step that used to be a terminal prompt is now buttons
+in the browser: approve, send back with feedback, or stop.
+
+The agents in `src/agents/` are identical in both modes — same prompts, same
+web search, same revision logic. The web layer (`server.js`,
+`src/web-orchestrator.js`, `web/`) only adds progress streaming, cost
+tracking, and a browser-based approval step around them.
+
+See `DEPLOY.md` for deploying the web console on your OCI VM.
+
 ## The five agents
 
 1. **Researcher** (`src/agents/1-researcher.js`) — uses Claude's built-in
