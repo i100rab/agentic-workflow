@@ -38,5 +38,5 @@ SUMMARY: (one sentence)`,
   const verdict = /VERDICT:\s*FLAG/i.test(text) ? "FLAG" : "PASS";
 
   log("ResponsibleAI", `Verdict: ${verdict}`);
-  return { verdict, report: text, usage: response.usage };
+  return { verdict, report: text, usage: response.usage, optimizer: response.__optimized || null };
 }

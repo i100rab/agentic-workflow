@@ -4,6 +4,7 @@ const STAGES = [
   { key: "write", label: "Writer" },
   { key: "rai", label: "Responsible AI check" },
   { key: "approve", label: "Human approval" },
+  { key: "explain", label: "Explanation" },
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -38,9 +39,14 @@ function renderPipeline() {
     const meta = stageMeta[s.key];
     const div = document.createElement("div");
     div.className = "stage " + status;
+    const metaText = meta
+      ? meta.cacheHit
+        ? "cache hit \u00b7 $0.0000"
+        : fmtCost(meta.cost) + " \u00b7 " + meta.tokensIn + "in/" + meta.tokensOut + "out"
+      : status;
     div.innerHTML = `
       <div class="name"><span class="dot ${status}"></span>${s.label}</div>
-      <div class="meta">${meta ? fmtCost(meta.cost) + " · " + meta.tokensIn + "in/" + meta.tokensOut + "out" : status}</div>`;
+      <div class="meta">${metaText}</div>`;
     el.appendChild(div);
   }
 }
@@ -84,9 +90,25 @@ function handleEvent(ev) {
       break;
     case "stage-done":
       stageStatus[ev.stage] = "done";
-      stageMeta[ev.stage] = { cost: ev.cost, tokensIn: ev.tokensIn, tokensOut: ev.tokensOut };
+      stageMeta[ev.stage] = {
+        cost: ev.cost,
+        tokensIn: ev.tokensIn,
+        tokensOut: ev.tokensOut,
+        cacheHit: ev.cacheHit,
+        compressionSavedTokens: ev.compressionSavedTokens,
+      };
       totalCost = ev.totalCost;
-      log(`${ev.label} done — ${fmtCost(ev.cost)} (${ev.tokensIn} in / ${ev.tokensOut} out)`);
+      if (ev.cacheHit) {
+        log(`${ev.label} \u2014 cache hit, API call skipped`, "hit");
+      } else {
+        const compressionNote = ev.compressionSavedTokens ? ` (compression saved ~${ev.compressionSavedTokens} tok)` : "";
+        log(`${ev.label} done \u2014 ${fmtCost(ev.cost)} (${ev.tokensIn} in / ${ev.tokensOut} out)${compressionNote}`);
+      }
+      break;
+    case "explanation-ready":
+      stageStatus.explain = "done";
+      renderExplanation(ev);
+      log("Explanation report ready", "hit");
       break;
     case "revision":
       stageStatus.write = "running";
@@ -140,6 +162,81 @@ function finishRun(ev) {
   if (source) { source.close(); source = null; }
 }
 
+function captionFor(s) {
+  if (s.cacheHit) {
+    return "Skipped the API call entirely — this matched an earlier cached query closely enough to reuse its answer. Real cost avoided: $0.";
+  }
+  const base = `Made a real API call — ${s.tokensIn} tokens in, ${s.tokensOut} tokens out, ${fmtCost(s.cost)}.`;
+  const compression = s.compressionSavedTokens
+    ? ` Before sending, the prompt was compressed, trimming roughly ${s.compressionSavedTokens} tokens of redundant content.`
+    : "";
+  return base + compression;
+}
+
+function renderGraph(stageLog, narrative) {
+  const nodes = stageLog
+    .map((s) => {
+      const cls = s.cacheHit ? "cache-hit" : "real-call";
+      const icon = s.cacheHit ? "\u21bb" : "\u2713";
+      return `
+        <div class="graph-node ${cls}">
+          <div class="graph-node-icon">${icon}</div>
+          <div class="graph-node-body">
+            <div class="graph-node-title">${s.label}</div>
+            <div class="graph-node-caption">${captionFor(s)}</div>
+          </div>
+        </div>
+        <div class="graph-connector"></div>`;
+    })
+    .join("");
+
+  const summary = `
+    <div class="graph-node summary">
+      <div class="graph-node-icon">\u2605</div>
+      <div class="graph-node-body">
+        <div class="graph-node-title">Explanation</div>
+        <div class="graph-node-caption">${narrative}</div>
+      </div>
+    </div>`;
+
+  $("explainGraph").innerHTML = `<div class="graph">${nodes}${summary}</div>`;
+}
+
+function renderExplanation(ev) {
+  $("explainPanel").classList.remove("hidden");
+  $("explainNarrative").textContent = ev.narrative;
+
+  const stageLog = ev.stageLog || [];
+  renderGraph(stageLog, ev.narrative);
+
+  const sources = ev.sources || [];
+  $("explainSources").innerHTML = sources.length
+    ? "<h3>Sources</h3><ul>" +
+      sources.map((s) => `<li><a href="${s.url}" target="_blank" rel="noopener">${s.title || s.url}</a></li>`).join("") +
+      "</ul>"
+    : '<h3>Sources</h3><p class="detail-empty">No new sources \u2014 served from cache.</p>';
+
+  const maxCost = Math.max(...stageLog.map((s) => s.cost), 0.0001);
+  const rows = stageLog
+    .map((s) => {
+      const pct = s.cacheHit ? 0 : (s.cost / maxCost) * 100;
+      const track = s.cacheHit
+        ? '<div class="chart-hit-badge">cache hit \u2014 $0.00</div>'
+        : `<div class="chart-fill" style="width:${pct}%"></div>`;
+      const valueText =
+        (s.cacheHit ? "$0.0000" : fmtCost(s.cost)) +
+        (s.compressionSavedTokens ? ` \u00b7 ${s.compressionSavedTokens} tok saved` : "");
+      return `
+        <div class="chart-row">
+          <span class="chart-label">${s.label}</span>
+          <div class="chart-track">${track}</div>
+          <span class="chart-value">${valueText}</span>
+        </div>`;
+    })
+    .join("");
+  $("explainChart").innerHTML = "<h3>Cost by stage</h3>" + rows;
+}
+
 async function startRun() {
   const topic = $("topicInput").value.trim();
   if (!topic) return;
@@ -147,6 +244,7 @@ async function startRun() {
   resetStages();
   $("essayPanel").classList.add("hidden");
   $("approvalPanel").classList.add("hidden");
+  $("explainPanel").classList.add("hidden");
   $("logFeed").innerHTML = "";
   $("startBtn").disabled = true;
   setStatusBadge("running", "running");

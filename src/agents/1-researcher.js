@@ -38,5 +38,5 @@ with the source URL that supports it. Prioritize recent, credible sources
   }
 
   log("Researcher", `Done. Gathered findings from ${sources.length} source(s).`);
-  return { findings, sources, usage: response.usage };
+  return { findings, sources, usage: response.usage, optimizer: response.__optimized || null };
 }
