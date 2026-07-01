@@ -1,127 +1,97 @@
-# Deploying the Agentic Workflow Web Console on OCI
+# Deploying on fresh OCI infrastructure
 
-This replaces the previous "ANZ Strategic Advisory Deals" dashboard on your
-existing OCI Always Free compute instance with the new live agent console.
-Same VM, same general pattern (nginx in front, Node app behind it, HTTPS via
-Let's Encrypt), new application.
+This provisions a new compute instance, deploys the web console (real
+agents + the optimizer library) on it with HTTPS and username/password
+login, verifies it end to end, and only then removes the old VM.
 
-Request flow once this is live:
-
-```
-Browser → OCI Security List (80/443) → nginx (TLS + Basic Auth) → pm2/Node on :3001 → Anthropic API
-```
+**Order matters here and deliberately doesn't match the order you asked
+for.** OCI's free-tier ARM capacity ("out of host capacity" errors) is
+unreliable right now, and free-tier ARM limits were just halved in
+mid-June 2026. If the old VM is deleted first and the new one fails to
+provision, you're left with nothing running. Provisioning the new instance
+first costs nothing extra and removes that risk entirely.
 
 ---
 
-## Part 1 — OCI resources: what you need
+## Part 0 — Which shape to use
 
-You already have the compute instance from the previous dashboard, so this
-is mostly verification, not provisioning.
+Two Always Free options, real tradeoff between them, worth deciding before
+you start rather than mid-setup:
 
-**Compute instance.** The Always Free shape (VM.Standard.E2.1.Micro or
-VM.Standard.A1.Flex on the Ampere free tier) you're already running. No
-change needed here.
+**VM.Standard.A1.Flex (Ampere ARM)** — as of June 2026, free tier accounts
+get 2 OCPUs / 12 GB total (down from 4/24 previously; Pay-As-You-Go
+accounts with a card on file may still get the higher limit). Plenty of
+headroom for this app, no OOM risk. The catch: it's frequently unavailable
+("out of host capacity") in busy regions and availability domains. If your
+first attempt fails, try a different availability domain, or a nearby
+region, or just retry every few minutes.
 
-**VCN Security List.** This is the one thing worth re-checking before you
-start, since it's the most common cause of "it deployed fine but I can't
-reach it." In the OCI Console:
+**VM.Standard.E2.1.Micro (AMD)** — 1/8 OCPU, 1 GB RAM. This is the
+memory-constrained shape that caused the OOM issue on the old VM. More
+reliably available, but you'll need the same swapfile fix as before, and
+it's tighter even with that.
 
-`Networking → Virtual Cloud Networks → (your VCN) → Security Lists → Default Security List`
+**Recommendation:** try A1.Flex first, with 1 OCPU / 6 GB (no need for the
+full 2/12 for this app). Fall back to E2.1.Micro + swapfile only if A1.Flex
+capacity genuinely isn't available in your region after a few retries.
 
-Confirm ingress rules exist for:
-- TCP 22 (SSH) — should already be there
-- TCP 80 (HTTP) — needed for Let's Encrypt's renewal challenge and the redirect to HTTPS
+---
+
+## Part 1 — Provision the new instance
+
+In the OCI Console:
+
+`Compute → Instances → Create Instance`
+
+- **Name:** something identifiable, e.g. `agentic-workflow-vm`
+- **Image:** Ubuntu 22.04 (simpler package management than Oracle Linux for
+  this stack — `ufw` instead of `firewalld`, no SELinux by default, which
+  removes two of the specific issues from the last deployment)
+- **Shape:** Change shape → Ampere → VM.Standard.A1.Flex → set 1 OCPU / 6 GB
+  (see Part 0)
+- **Networking:** create a new VCN if you don't want to reuse the old one —
+  the wizard's "Create new virtual cloud network" default option handles
+  the VCN, subnet, internet gateway, and route table for you
+- **SSH keys:** generate a new pair or reuse an existing one:
+  ```bash
+  ssh-keygen -t ed25519 -f ~/.ssh/oci-agentic-workflow
+  ```
+  Paste the contents of the `.pub` file into the console's SSH key field.
+- Click **Create**, and note the public IP once it's running.
+
+If you hit "out of host capacity": change the availability domain dropdown
+and retry, or switch region if you have a preferred nearby one, or fall
+back to E2.1.Micro per Part 0.
+
+---
+
+## Part 2 — Networking: Security List
+
+`Networking → Virtual Cloud Networks → (your new VCN) → Security Lists → Default Security List`
+
+Add ingress rules if they're not already present from the wizard:
+
+- TCP 22 (SSH) — usually added automatically
+- TCP 80 (HTTP) — needed for Let's Encrypt and the redirect to HTTPS
 - TCP 443 (HTTPS) — the actual app traffic
 
-If 80/443 aren't listed, add them (source CIDR `0.0.0.0/0`, destination port
-range matching each).
-
-**Nothing else.** No load balancer, no Object Storage, no database — this
-app is a single Node process with in-memory state, so the VM is the whole
-stack. If you later want run history to survive a restart, that's a future
-add (SQLite on the same VM would be the lightest option), not something
-needed for a live demo.
+Source CIDR `0.0.0.0/0` for both, matching destination port.
 
 ---
 
-## Part 2 — Get the code onto GitHub
+## Part 3 — SSH in and confirm the VM is reachable
 
-The web console code isn't pushed yet. Fastest path: generate a fresh
-fine-grained personal access token the same way as before (Settings →
-Developer settings → Personal access tokens → Fine-grained tokens, scoped
-to just this repo, Contents: Read and write) and send it over, and I'll
-push directly. Revoke it again once it's done.
+```bash
+ssh -i ~/.ssh/oci-agentic-workflow ubuntu@<new-public-ip>
+```
 
-If you'd rather not, unzip the project bundle directly on the VM once
-you're SSHed in (Part 6 below covers this) and push from there instead —
-that avoids sharing a token with me at all.
+(Username is `ubuntu` for the Ubuntu image, `opc` for Oracle Linux.)
 
 ---
 
-## Part 3 — SSH into the VM
+## Part 4 — Base setup
 
-```bash
-ssh <your-user>@<your-oci-public-ip>
-```
-
----
-
-## Part 4 — Remove the old dashboard completely
-
-Don't guess at how it was left running — check directly.
-
-```bash
-# Running under pm2?
-pm2 list
-
-# A systemd service?
-systemctl list-units --type=service --all | grep -i -E "dashboard|node|express"
-
-# What's actually listening on web ports?
-sudo ss -tlnp | grep -E ":80|:443|:3000|:3001|:5000|:8080"
-```
-
-Stop whatever shows up:
-
-```bash
-pm2 delete <old-process-name>
-# or
-sudo systemctl stop <old-service-name>
-sudo systemctl disable <old-service-name>
-```
-
-Remove the old nginx server block:
-
-```bash
-ls /etc/nginx/sites-enabled/
-ls /etc/nginx/conf.d/
-sudo rm /etc/nginx/sites-enabled/old-dashboard.conf   # adjust filename
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-Move the old app folder aside rather than deleting outright, until the new
-one is confirmed working:
-
-```bash
-cd ~
-mv old-dashboard-folder old-dashboard-folder.bak
-```
-
----
-
-## Part 5 — Prepare the Node.js environment
-
-The OOM issue last time was fixed with the Node binary tarball plus a
-swapfile. If that swapfile is still active, skip to the version check. If
-you're unsure:
-
-```bash
-swapon --show
-free -h
-```
-
-If nothing shows under swap, recreate it (2GB is enough for this app):
+Swapfile (worth having regardless of shape, cheap insurance):
 
 ```bash
 sudo fallocate -l 2G /swapfile
@@ -131,15 +101,18 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-Confirm Node is available and reasonably current (v18+):
+Node.js — on Ubuntu, the NodeSource setup script is simpler than the binary
+tarball approach used last time, and shouldn't hit the same OOM issue given
+the extra RAM on A1.Flex:
 
 ```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 node -v
 ```
 
-If it's missing or too old, install via the binary tarball approach that
-worked before rather than a package manager, to sidestep the OOM issue
-during compilation:
+If you fell back to E2.1.Micro, use the binary tarball approach instead
+(same as before) to avoid compiling anything during install:
 
 ```bash
 cd ~
@@ -149,48 +122,50 @@ sudo cp -r node-v20.*-linux-x64/{bin,lib,include,share} /usr/local/
 node -v
 ```
 
+Install nginx and certbot:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y nginx certbot python3-certbot-nginx apache2-utils
+```
+
+(`apache2-utils` gives you `htpasswd`, needed for Part 8.)
+
 ---
 
-## Part 6 — Get the code onto the VM
+## Part 5 — Get the code
 
-If Part 2 is done and the repo is pushed:
+The repo needs pushing first — see Part 11. Once it's on GitHub:
 
 ```bash
 cd ~
 git clone https://github.com/i100rab/agentic-workflow.git
 cd agentic-workflow
-```
-
-If you already have a clone from earlier, `git pull` instead. If you're
-pushing from the VM itself instead of via GitHub, unzip the bundle here,
-`cd` into it, and run `git remote add origin ...` / `git push` as covered
-earlier, then continue below.
-
----
-
-## Part 7 — Install dependencies
-
-```bash
 npm install --production
 ```
 
-No frontend build step here (the console is plain HTML/JS, no React/Vite),
-so this should be lighter and faster than the old dashboard's install.
-
 ---
 
-## Part 8 — Configure environment variables
+## Part 6 — Environment variables
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Paste in `ANTHROPIC_API_KEY=sk-ant-...` and save.
+Set:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+OPTIMIZE=true
+```
+
+`OPTIMIZE=true` is what routes every agent through the caching +
+compression wrapper for the live demo. Leave it unset for a raw comparison
+run if you want to show the difference live.
 
 ---
 
-## Part 9 — Run it persistently with pm2
+## Part 7 — Run persistently with pm2
 
 ```bash
 sudo npm install -g pm2
@@ -199,34 +174,48 @@ pm2 save
 pm2 startup
 ```
 
-`pm2 startup` prints a command tailored to your system, run it as instructed
-so the app survives a VM reboot.
-
-The app listens on port 3001 by default. Confirm it's up before touching
-nginx:
+Run the command `pm2 startup` prints, so it survives a reboot. Confirm it's
+up:
 
 ```bash
 curl -I http://localhost:3001
 ```
 
-You should see a `200 OK`.
-
 ---
 
-## Part 10 — nginx reverse proxy
+## Part 8 — nginx: HTTPS + username/password
 
-The one real difference from the old dashboard: this app streams live
-progress over Server-Sent Events, and nginx buffers responses by default,
-which makes the stream appear frozen until it's fully buffered. The config
-below explicitly disables buffering on that route.
+The new public IP gives you a fresh sslip.io hostname automatically — no
+DNS setup needed, since sslip.io just resolves `<ip-with-dashes>.sslip.io`
+back to that IP. If your new IP is e.g. `140.238.12.34`, your hostname is
+`140-238-12-34.sslip.io`.
+
+**Set the password first:**
+
+```bash
+sudo htpasswd -c /etc/nginx/.htpasswd yourusername
+```
+
+(You'll be prompted to set a password. Drop the `-c` if adding a second
+user later, `-c` overwrites the file.)
+
+**Get the certificate:**
+
+```bash
+sudo certbot certonly --nginx -d 140-238-12-34.sslip.io
+```
+
+(Replace with your actual dash-formatted IP.)
+
+**nginx config**, save as `/etc/nginx/sites-available/agentic-workflow`:
 
 ```nginx
 server {
     listen 443 ssl;
-    server_name your-existing-hostname.sslip.io;
+    server_name 140-238-12-34.sslip.io;
 
-    ssl_certificate     /etc/letsencrypt/live/your-existing-hostname.sslip.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/your-existing-hostname.sslip.io/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/140-238-12-34.sslip.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/140-238-12-34.sslip.io/privkey.pem;
 
     auth_basic "Restricted";
     auth_basic_user_file /etc/nginx/.htpasswd;
@@ -237,7 +226,7 @@ server {
         proxy_set_header Connection "";
     }
 
-    # SSE stream needs buffering off, or progress won't appear live
+    # SSE stream needs buffering off, or live progress won't appear live
     location /api/runs/ {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
@@ -251,111 +240,61 @@ server {
 
 server {
     listen 80;
-    server_name your-existing-hostname.sslip.io;
+    server_name 140-238-12-34.sslip.io;
     return 301 https://$host$request_uri;
 }
 ```
 
-Save this as `/etc/nginx/sites-available/agentic-workflow.conf` (or
-`conf.d/` depending on your distro) and symlink/enable it if your distro
-requires that step.
-
-Reuse the existing cert if the hostname is unchanged. If it's a new
-hostname, issue a fresh one:
+Enable it and reload:
 
 ```bash
-sudo certbot --nginx -d your-new-hostname.sslip.io
-```
-
-Reuse the old `.htpasswd` for the same login, or create a new one:
-
-```bash
-sudo htpasswd -c /etc/nginx/.htpasswd yourusername
-```
-
-Test and reload:
-
-```bash
+sudo ln -s /etc/nginx/sites-available/agentic-workflow /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
----
-
-## Part 11 — VM-level firewall (separate from the OCI Security List)
-
-The Security List controls traffic at the OCI network layer, but the VM's
-own OS firewall can independently block the same ports. This has caught
-people out before on OCI specifically, since Oracle Linux images ship with
-`firewalld` active by default.
-
-Check which firewall (if any) is active:
+**Ubuntu firewall** — `ufw` may be inactive by default, but check:
 
 ```bash
-sudo systemctl status firewalld    # Oracle Linux / RHEL-based
-sudo ufw status                    # Ubuntu
-```
-
-If `firewalld` is active, open the ports:
-
-```bash
-sudo firewall-cmd --permanent --add-port=80/tcp
-sudo firewall-cmd --permanent --add-port=443/tcp
-sudo firewall-cmd --reload
-```
-
-If `ufw` is active:
-
-```bash
+sudo ufw status
+# if active:
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 ```
 
-If nginx couldn't reach the Node app specifically (distinct from the
-browser not reaching nginx), that's usually SELinux rather than the
-firewall, same fix as before:
+---
 
-```bash
-sudo setsebool -P httpd_can_network_connect 1
-```
+## Part 9 — Verify end to end
+
+1. Visit `https://140-238-12-34.sslip.io` (your actual hostname) — browser
+   should show a valid padlock, no certificate warning.
+2. You should hit a username/password prompt before seeing anything else.
+3. After logging in: the console loads, enter a topic, set a budget cap,
+   start a run, watch the five agents progress live.
+4. Check `pm2 logs agentic-workflow-web` if anything looks wrong.
+
+Don't move to Part 10 until this all genuinely works.
 
 ---
 
-## Part 12 — Verify end to end
+## Part 10 — Now remove the old VM
 
-1. Visit `https://your-hostname.sslip.io` — you should hit the Basic Auth
-   prompt first.
-2. After logging in, you should see the console: topic field, budget cap,
-   "Start run" button.
-3. Enter a topic, set a cap (start generous, e.g. $0.50, so you see a full
-   successful run before testing the governor), click Start.
-4. Watch the pipeline panel move through Researcher → Assessor → Writer →
-   Responsible AI check → Human approval in real time, with real cost per
-   stage.
-5. Approve or send back feedback when prompted.
-6. Lower the cap and run again to confirm the governor actually halts a run.
+`Compute → Instances → (old instance) → Terminate`
+
+You'll be asked whether to also delete the attached boot volume — fine to
+delete it once the new deployment is confirmed working, since there's
+nothing on it you need anymore.
 
 ---
 
-## Part 13 — Cleanup and maintenance
+## Part 11 — Push the code to GitHub
 
-Once you've confirmed everything works, remove the old dashboard's backup:
-
-```bash
-rm -rf ~/old-dashboard-folder.bak
-```
-
-To update after future pushes:
-
-```bash
-cd ~/agentic-workflow
-git pull
-npm install --production
-pm2 restart agentic-workflow-web
-```
-
-To check logs if something misbehaves during a live demo:
-
-```bash
-pm2 logs agentic-workflow-web
-```
+This needs to happen before Part 5, but is last here since it's the one
+step outside the VM. Generate a fresh fine-grained personal access token
+(Settings → Developer settings → Personal access tokens → Fine-grained
+tokens, scoped to this repo only, Contents: Read and write) and send it
+over — I'll push directly, then you revoke it. This is what makes the
+optimizer library, the web console, and the support-triage example
+actually available to pull down and hand to leadership as a real,
+version-controlled deliverable.
