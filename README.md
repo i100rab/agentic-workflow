@@ -7,6 +7,46 @@ output forward. This is deliberately the simplest version of the pattern so
 you can see exactly what's happening at each step before reaching for
 something heavier (LangGraph, CrewAI, etc.) later.
 
+## Cost optimization: caching + compression, no governance
+
+`lib/agent-optimizer.js` is a standalone, reusable wrapper around the
+Anthropic client that adds two real cost reductions, and nothing else — no
+budget cap, no meter, no observability layer:
+
+- **Caching** — near-duplicate questions (reworded, reordered) get served
+  from a local cache instead of triggering a new API call. Similarity is
+  word-overlap based (no embeddings call needed, so the lookup itself is
+  free), scoped per agent role via each agent's own system prompt, and
+  calibrated to a threshold that catches real restatements while rejecting
+  same-topic-different-intent questions (tested explicitly against a
+  "benefits vs risks" style adversarial pair during development).
+- **Compression** — every prompt gets filler-phrase stripping, duplicate
+  content removal across a message history, and a sliding window that caps
+  how much old context gets resent. All of it operates on message structure
+  and text, not on what any specific agent is trying to do.
+
+**It's a one-line integration.** `src/client.js` is the only file that
+constructs the Anthropic client; everything else imports it. Setting
+`OPTIMIZE=true` in `.env` routes every agent's calls through the wrapper
+with zero changes to any agent's prompts or logic.
+
+**Proof it generalizes.** `examples/support-triage/pipeline.js` is a second,
+differently-shaped pipeline (classify → look up policy → draft reply,
+customer support domain) using the exact same one-line pattern, to
+demonstrate this isn't special-cased to the essay agents.
+
+### Running the benchmark
+
+```bash
+npm run benchmark
+```
+
+This runs both systems (the real Researcher agent, and the support triage
+pipeline) twice each — once raw, once optimized — using real API calls, and
+writes `benchmark/REPORT.md` with real token counts, real costs, and real
+cache hit rates. That report is the thing to take to leadership: it's
+generated from actual usage, not modeled or estimated.
+
 ## Two ways to run this
 
 **CLI** (original, terminal-based approval):

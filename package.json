@@ -6,7 +6,8 @@
   "main": "run.js",
   "scripts": {
     "start": "node run.js",
-    "start:web": "node server.js"
+    "start:web": "node server.js",
+    "benchmark": "node benchmark.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",
