@@ -283,31 +283,68 @@ function renderExplanation(ev) {
   $("explainChart").innerHTML = "<h3>Cost by stage</h3>" + rows;
 }
 
+let pendingAction = null;
+
+function showLogin(retryFn) {
+  pendingAction = retryFn;
+  $("loginPanel").classList.remove("hidden");
+  $("loginError").classList.add("hidden");
+  $("loginUsername").focus();
+}
+
+async function doLogin() {
+  const username = $("loginUsername").value.trim();
+  const password = $("loginPassword").value;
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    $("loginError").classList.remove("hidden");
+    return;
+  }
+  $("loginPanel").classList.add("hidden");
+  $("loginPassword").value = "";
+  const retry = pendingAction;
+  pendingAction = null;
+  if (retry) retry();
+}
+
 async function startRun() {
   const topic = $("topicInput").value.trim();
   if (!topic) return;
   cap = Number($("capInput").value) || 0;
-  resetStages();
-  $("essayPanel").classList.add("hidden");
-  $("approvalPanel").classList.add("hidden");
-  $("explainPanel").classList.add("hidden");
-  $("logFeed").innerHTML = "";
-  $("startBtn").disabled = true;
-  setStatusBadge("running", "running");
-  renderPipeline();
-  renderMeter();
 
+  $("startBtn").disabled = true;
   const res = await fetch("/api/runs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ topic, cap }),
   });
+
+  if (res.status === 401) {
+    $("startBtn").disabled = false;
+    showLogin(startRun);
+    return;
+  }
+
   const data = await res.json();
   if (!res.ok) {
     log("Failed to start — " + (data.error || "unknown error"), "block");
     $("startBtn").disabled = false;
     return;
   }
+
+  resetStages();
+  $("essayPanel").classList.add("hidden");
+  $("approvalPanel").classList.add("hidden");
+  $("explainPanel").classList.add("hidden");
+  $("logFeed").innerHTML = "";
+  setStatusBadge("running", "running");
+  renderPipeline();
+  renderMeter();
+
   runId = data.runId;
   source = new EventSource(`/api/runs/${runId}/events`);
   source.onmessage = (msg) => handleEvent(JSON.parse(msg.data));
@@ -316,11 +353,15 @@ async function startRun() {
 
 async function submitApproval(approved, stop) {
   const feedback = $("feedbackInput").value.trim();
-  await fetch(`/api/runs/${runId}/approve`, {
+  const res = await fetch(`/api/runs/${runId}/approve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ approved, feedback, stop }),
   });
+  if (res.status === 401) {
+    showLogin(() => submitApproval(approved, stop));
+    return;
+  }
   $("feedbackInput").value = "";
 }
 
@@ -328,6 +369,10 @@ $("startBtn").addEventListener("click", startRun);
 $("approveBtn").addEventListener("click", () => submitApproval(true, false));
 $("reviseBtn").addEventListener("click", () => submitApproval(false, false));
 $("stopBtn").addEventListener("click", () => submitApproval(false, true));
+$("loginBtn").addEventListener("click", doLogin);
+$("loginPassword").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doLogin();
+});
 
 renderPipeline();
 renderMeter();

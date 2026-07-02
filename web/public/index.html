@@ -17,6 +17,17 @@
       <span class="status-badge" id="statusBadge">idle</span>
     </header>
 
+    <div class="panel hidden" id="loginPanel">
+      <h2>Login required</h2>
+      <p class="login-note">The page is open to anyone, but starting a run needs a login.</p>
+      <div class="login-form">
+        <input type="text" id="loginUsername" placeholder="Username" autocomplete="username">
+        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+        <button class="btn primary" id="loginBtn">Log in</button>
+      </div>
+      <p class="login-error hidden" id="loginError">Incorrect username or password.</p>
+    </div>
+
     <div class="panel" id="startPanel">
       <h2>New run</h2>
       <div class="start-form">

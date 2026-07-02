@@ -148,11 +148,22 @@ Set:
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 OPTIMIZE=true
+APP_USERNAME=saurabh
+APP_PASSWORD=pick-something-real
 ```
 
 `OPTIMIZE=true` is what routes every agent through the caching +
 compression wrapper for the live demo. Leave it unset for a raw comparison
 run if you want to show the difference live.
+
+`APP_USERNAME`/`APP_PASSWORD` is the login for the app itself, checked
+only when someone starts a run, not on page load. Given nano's paste
+behavior has bitten us before on this VM, use `echo` to append these two
+lines instead of editing them by hand if you want to be safe:
+```bash
+echo "APP_USERNAME=saurabh" >> .env
+echo "APP_PASSWORD=pick-something-real" >> .env
+```
 
 ---
 
@@ -174,21 +185,23 @@ curl -I http://localhost:3001
 
 ---
 
-## Part 8 — nginx: HTTPS + username/password
+## Part 8 — nginx: HTTPS
+
+Login now happens inside the app itself (Part 6 covers setting
+`APP_USERNAME`/`APP_PASSWORD` in `.env`), not at the nginx layer. The page
+loads freely; login is only checked when someone actually starts a run.
+That's a deliberate change from the previous setup, and it's also required
+technically: the live progress stream (Server-Sent Events) can't carry a
+custom Authorization header the way `auth_basic` needs, so a real app-level
+session was the correct fix, not a nginx-level password prompt.
+
+If you're updating a VM that previously had `auth_basic` configured, remove
+it and the `.htpasswd` file, nginx should only handle TLS and proxying now.
 
 The new public IP gives you a fresh sslip.io hostname automatically — no
 DNS setup needed, since sslip.io just resolves `<ip-with-dashes>.sslip.io`
 back to that IP. If your new IP is e.g. `140.238.12.34`, your hostname is
 `140-238-12-34.sslip.io`.
-
-**Set the password first:**
-
-```bash
-sudo htpasswd -c /etc/nginx/.htpasswd yourusername
-```
-
-(You'll be prompted to set a password. Drop the `-c` if adding a second
-user later, `-c` overwrites the file.)
 
 **Get the certificate:**
 
@@ -207,9 +220,6 @@ server {
 
     ssl_certificate     /etc/letsencrypt/live/140-238-12-34.sslip.io/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/140-238-12-34.sslip.io/privkey.pem;
-
-    auth_basic "Restricted";
-    auth_basic_user_file /etc/nginx/.htpasswd;
 
     location / {
         proxy_pass http://127.0.0.1:3001;
@@ -265,11 +275,15 @@ sudo setsebool -P httpd_can_network_connect 1
 ## Part 9 — Verify end to end
 
 1. Visit `https://140-238-12-34.sslip.io` (your actual hostname) — browser
-   should show a valid padlock, no certificate warning.
-2. You should hit a username/password prompt before seeing anything else.
-3. After logging in: the console loads, enter a topic, set a budget cap,
-   start a run, watch the five agents progress live.
-4. Check `pm2 logs agentic-workflow-web` if anything looks wrong.
+   should show a valid padlock, no certificate warning, and the page should
+   load directly with no login prompt yet.
+2. Enter a topic and a budget cap, click Start run. This is where login
+   should appear now, not before, since starting a run is the first thing
+   that actually needs it.
+3. Log in with the `APP_USERNAME`/`APP_PASSWORD` from `.env`. The run
+   should start immediately after, no need to click Start run again.
+4. Watch the six agents progress live.
+5. Check `pm2 logs agentic-workflow-web` if anything looks wrong.
 
 Don't move to Part 10 until this all genuinely works.
 

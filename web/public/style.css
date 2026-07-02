@@ -96,6 +96,14 @@ header h1{font-size:24px;}
 .hidden{display:none !important;}
 footer{font-size:11px; color:var(--text-faint); text-align:center; margin-top:10px;}
 
+.login-note{font-size:13px; color:var(--text-muted); margin-bottom:12px;}
+.login-form{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+.login-form input{
+  font-family:var(--sans); background:var(--card); border:1px solid var(--border-2); color:var(--text);
+  border-radius:6px; padding:9px 12px; font-size:14px; min-width:160px;
+}
+.login-error{color:var(--coral); font-size:12px; margin-top:10px;}
+
 /* explanation report */
 .explain-narrative{font-size:14px; color:var(--text); margin-bottom:6px;}
 #explainSources h3, #explainChart h3{font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin:18px 0 8px;}
