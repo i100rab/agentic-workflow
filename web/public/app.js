@@ -88,6 +88,13 @@ function handleEvent(ev) {
       stageStatus[ev.stage] = "running";
       log(`${ev.label} started`);
       break;
+    case "handoff-compressed":
+      if (ev.charsSaved > 0) {
+        log(`${ev.label} compressed \u2014 ${ev.originalChars} to ${ev.compressedChars} characters before the next agent saw it`, "hit");
+      } else {
+        log(`${ev.label} \u2014 already short, nothing to trim`);
+      }
+      break;
     case "stage-done":
       stageStatus[ev.stage] = "done";
       stageMeta[ev.stage] = {
@@ -202,12 +209,51 @@ function renderGraph(stageLog, narrative) {
   $("explainGraph").innerHTML = `<div class="graph">${nodes}${summary}</div>`;
 }
 
+function preview(text, max = 500) {
+  const t = text || "";
+  return t.length > max ? t.slice(0, max) + "\u2026" : t;
+}
+
+function renderCompressionDiff(handoffCompressions) {
+  const el = $("explainCompression");
+  if (!handoffCompressions || handoffCompressions.length === 0) {
+    el.innerHTML = "";
+    return;
+  }
+  const blocks = handoffCompressions
+    .map((h) => {
+      const stat = h.charsSaved > 0
+        ? `${h.originalChars} \u2192 ${h.compressedChars} characters (${h.charsSaved} trimmed)`
+        : "no trimming needed";
+      return `
+        <div class="compress-block">
+          <div class="compress-head">
+            <span class="compress-title">${h.label}</span>
+            <span class="compress-stat ${h.charsSaved > 0 ? "" : "none"}">${stat}</span>
+          </div>
+          <div class="compress-cols">
+            <div>
+              <div class="compress-col-label">Original</div>
+              <div class="compress-text">${preview(h.original)}</div>
+            </div>
+            <div>
+              <div class="compress-col-label">Sent to next agent</div>
+              <div class="compress-text after">${preview(h.compressed)}</div>
+            </div>
+          </div>
+        </div>`;
+    })
+    .join("");
+  el.innerHTML = "<h3>Context compression, before and after</h3>" + blocks;
+}
+
 function renderExplanation(ev) {
   $("explainPanel").classList.remove("hidden");
   $("explainNarrative").textContent = ev.narrative;
 
   const stageLog = ev.stageLog || [];
   renderGraph(stageLog, ev.narrative);
+  renderCompressionDiff(ev.handoffCompressions);
 
   const sources = ev.sources || [];
   $("explainSources").innerHTML = sources.length
