@@ -19,7 +19,7 @@ export async function runWorkflow(topic) {
   const { assessment: vettedBrief } = await assessmentAgent(topic, findings, sources);
 
   // Agent 3 (first draft)
-  let { essay } = await writerAgent(topic, vettedBrief);
+  let { essay, history } = await writerAgent(topic, vettedBrief);
 
   // Loop: Agent 4 (RAI check) -> if FLAG, back to Agent 3 with feedback
   let raiResult = await responsibleAIAgent(topic, essay);
@@ -27,7 +27,7 @@ export async function runWorkflow(topic) {
   while (raiResult.verdict === "FLAG" && revisions < MAX_REVISIONS) {
     revisions++;
     log("Orchestrator", `RAI flagged the draft. Revision ${revisions}/${MAX_REVISIONS}.`);
-    ({ essay } = await writerAgent(topic, vettedBrief, raiResult.report));
+    ({ essay, history } = await writerAgent(topic, vettedBrief, history, raiResult.report));
     raiResult = await responsibleAIAgent(topic, essay);
   }
 
@@ -46,7 +46,7 @@ export async function runWorkflow(topic) {
       log("Orchestrator", "Too many rounds of human feedback, stopping here.");
       return { status: "abandoned", essay };
     }
-    ({ essay } = await writerAgent(topic, vettedBrief, feedback));
+    ({ essay, history } = await writerAgent(topic, vettedBrief, history, feedback));
     raiResult = await responsibleAIAgent(topic, essay);
   }
 

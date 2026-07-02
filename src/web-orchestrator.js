@@ -116,7 +116,7 @@ export async function runWebWorkflow(run) {
     if (overBudget()) return finish(run, "blocked", { spent }, stageLog, sourcesUsed);
 
     run.emit({ type: "stage-start", stage: "write", label: "Writer" });
-    let { essay, usage: u3, optimizer: o3 } = await writerAgent(topic, vettedBrief);
+    let { essay, usage: u3, optimizer: o3, history } = await writerAgent(topic, vettedBrief);
     record("write", "Writer", u3, o3);
     if (overBudget()) return finish(run, "blocked", { spent }, stageLog, sourcesUsed);
 
@@ -129,7 +129,7 @@ export async function runWebWorkflow(run) {
       if (overBudget()) return finish(run, "blocked", { spent, essay }, stageLog, sourcesUsed);
       revisions++;
       run.emit({ type: "revision", stage: "write", round: revisions });
-      ({ essay, usage: u3, optimizer: o3 } = await writerAgent(topic, vettedBrief, raiResult.report));
+      ({ essay, usage: u3, optimizer: o3, history } = await writerAgent(topic, vettedBrief, history, raiResult.report));
       record("write", `Writer (revision ${revisions})`, u3, o3);
       raiResult = await responsibleAIAgent(topic, essay);
       record("rai", `Responsible AI check (revision ${revisions})`, raiResult.usage, raiResult.optimizer);
@@ -145,7 +145,7 @@ export async function runWebWorkflow(run) {
       approvalRounds++;
       if (approvalRounds > 3) return finish(run, "abandoned", { spent, essay }, stageLog, sourcesUsed);
       run.emit({ type: "revision", stage: "write", round: `feedback-${approvalRounds}` });
-      ({ essay, usage: u3, optimizer: o3 } = await writerAgent(topic, vettedBrief, decision.feedback));
+      ({ essay, usage: u3, optimizer: o3, history } = await writerAgent(topic, vettedBrief, history, decision.feedback));
       record("write", "Writer (human feedback)", u3, o3);
       raiResult = await responsibleAIAgent(topic, essay);
       record("rai", "Responsible AI check", raiResult.usage, raiResult.optimizer);
