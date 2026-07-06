@@ -1,0 +1,93 @@
+/* ==========================================================================
+   Home hero — dark canvas "network" treatment, scoped entirely under
+   .ns-hero / body.has-dark-hero so nothing here can collide with the
+   site-wide .eyebrow / .stat-grid / .brand rules used on every other
+   section and page. Ported from a Claude Artifact export: the canvas
+   animation logic lives in js/hero-canvas.js as plain vanilla JS (no
+   React/bundle runtime), to keep this page as dependency-free as the
+   rest of the site.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+
+/* Let the sticky global header read against the dark hero before the
+   page has scrolled; once .is-scrolled kicks in it's back on the paper
+   background and the normal dark-ink header styles apply unchanged. */
+body.has-dark-hero .site-header:not(.is-scrolled) .brand{ color: #f4f2ec; }
+body.has-dark-hero .site-header:not(.is-scrolled) .brand .mark{ border-color: #f4f2ec; }
+body.has-dark-hero .site-header:not(.is-scrolled) .brand .mark::after{ background: #5fb8f0; }
+body.has-dark-hero .site-header:not(.is-scrolled) .main-nav a{ color: rgba(244,242,236,0.7); }
+body.has-dark-hero .site-header:not(.is-scrolled) .main-nav a:hover,
+body.has-dark-hero .site-header:not(.is-scrolled) .main-nav a[aria-current="page"]{ color: #f4f2ec; }
+body.has-dark-hero .site-header:not(.is-scrolled) .nav-toggle{ color: #f4f2ec; border-color: rgba(244,242,236,0.3); }
+body.has-dark-hero .site-header:not(.is-scrolled) .contact-link{ border-color: rgba(244,242,236,0.4); color: #f4f2ec !important; }
+body.has-dark-hero .site-header:not(.is-scrolled) .contact-link:hover{ background: #f4f2ec; color: #08080b !important; }
+
+/* Header height is fixed by our own CSS (padding + font sizes), measured
+   at 68px in both the desktop and mobile nav states — used to pull the
+   hero up underneath the sticky header so the dark background shows
+   through it, while padding the hero's content down by the same amount
+   so nothing sits under the nav. */
+.ns-hero{
+  position: relative;
+  min-height: 92svh;
+  width: 100%;
+  overflow: hidden;
+  background: #08080b;
+  color: #f4f2ec;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  --accent: #5fb8f0;
+  --header-h: 69px;
+  margin-top: calc(-1 * var(--header-h));
+  -webkit-font-smoothing: antialiased;
+}
+.ns-net{ position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.ns-veil{
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 78% 42%, rgba(95,184,240,0.10), transparent 55%),
+    linear-gradient(100deg, #08080b 22%, rgba(8,8,11,0.72) 46%, rgba(8,8,11,0.30) 72%, rgba(8,8,11,0.55) 100%);
+}
+.ns-vig{ position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 220px 40px rgba(4,4,6,0.9); }
+.ns-grain{
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.04; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.ns-wrap{ position: relative; z-index: 2; min-height: 92svh; display: flex; flex-direction: column; padding: calc(var(--header-h) + clamp(24px,5vh,64px)) clamp(24px,5vw,84px) 48px; }
+.ns-stage{ flex: 1; display: flex; align-items: center; }
+.ns-content{ max-width: 760px; padding: 40px 0; }
+.ns-eyebrow{ display: inline-flex; align-items: center; gap: 12px; font-size: 12.5px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(244,242,236,0.62); margin-bottom: 30px; }
+.ns-eyebrow i{ width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px 2px var(--accent); font-style: normal; }
+.ns-head{ font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(52px,8.4vw,116px); line-height: 0.98; letter-spacing: -0.012em; margin: 0; }
+.ns-head .ns-em{ font-style: italic; color: var(--accent); }
+.ns-head .ns-w{ display: inline-block; }
+.ns-sub{ max-width: 640px; margin: 34px 0 0; font-size: clamp(18px,2vw,22px); line-height: 1.6; color: rgba(244,242,236,0.72); }
+.ns-actions{ display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 38px; }
+.ns-btnp{
+  display: inline-flex; align-items: center; gap: 10px;
+  background: #f4f2ec; color: #08080b; border: none;
+  font-family: inherit; font-weight: 500; font-size: 15.5px;
+  padding: 15px 28px; border-radius: 100px; cursor: pointer;
+  transition: transform .25s, box-shadow .25s;
+}
+.ns-btnp:hover{ transform: translateY(-2px); box-shadow: 0 14px 40px -12px rgba(95,184,240,0.5); }
+.ns-btnp svg{ transition: transform .25s; }
+.ns-btnp:hover svg{ transform: translateX(4px); }
+.ns-btns{ display: inline-flex; align-items: center; gap: 10px; background: transparent; color: rgba(244,242,236,0.82); border: none; font-family: inherit; font-size: 15.5px; padding: 15px 8px; cursor: pointer; transition: color .25s; }
+.ns-btns:hover{ color: #f4f2ec; }
+.ns-dot{ width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.ns-foot{ display: flex; flex-wrap: wrap; gap: 34px; margin-top: min(7vh,74px); padding-top: 26px; border-top: 1px solid rgba(244,242,236,0.09); }
+.ns-stat{ display: flex; flex-direction: column; gap: 5px; }
+.ns-stat b{ font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 32px; letter-spacing: -0.01em; }
+.ns-stat span{ font-size: 12.5px; letter-spacing: 0.06em; color: rgba(244,242,236,0.5); }
+
+.ns-rev{ opacity: 0; animation: ns-rise .9s cubic-bezier(.2,.7,.2,1) forwards; }
+.ns-d1{ animation-delay: .15s; } .ns-d2{ animation-delay: .32s; } .ns-d4{ animation-delay: .46s; }
+.ns-d5{ animation-delay: .6s; } .ns-d6{ animation-delay: .74s; } .ns-d8{ animation-delay: 1.02s; }
+@keyframes ns-rise{ from{ opacity: 0; transform: translateY(16px); filter: blur(6px); } to{ opacity: 1; transform: none; filter: blur(0); } }
+
+@media (max-width: 760px){
+  .ns-foot{ gap: 24px; }
+  .ns-stat b{ font-size: 26px; }
+  .ns-content{ padding: 12px 0; }
+}

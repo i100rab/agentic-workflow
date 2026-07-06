@@ -6,9 +6,10 @@
 <title>NeoStack — IT Consulting &amp; Transformation, Australia</title>
 <meta name="description" content="NeoStack plans and runs technology transformation for mid-market and enterprise teams across Australia: cloud migration, cybersecurity, data enablement, and managed IT.">
 <link rel="stylesheet" href="css/style.css">
-<noscript><style>.reveal{opacity:1 !important;transform:none !important}</style></noscript>
+<link rel="stylesheet" href="css/hero.css">
+<noscript><style>.reveal{opacity:1 !important;transform:none !important}.ns-rev{opacity:1 !important;transform:none !important;filter:none !important}</style></noscript>
 </head>
-<body>
+<body class="has-dark-hero">
 
 <header class="site-header">
   <div class="container">
@@ -30,46 +31,27 @@
 
 <main id="main-content">
 
-  <section class="hero">
-    <div class="container hero-grid">
-      <div>
-        <p class="eyebrow">Sydney &amp; Melbourne — IT Consulting &amp; Transformation</p>
-        <h1>Legacy systems, re-architected without the downtime.</h1>
-        <p class="hero-lede">NeoStack plans and runs technology transformation for mid-market and enterprise teams across Australia &mdash; cloud migration, security, data, and the managed operations that keep it all running afterward.</p>
-        <svg class="trace-glyph draw" viewBox="0 0 120 32" aria-hidden="true" style="margin-top:2rem">
-          <path d="M2 26 H30 V6 H70 V26 H118"/>
-          <circle cx="2" cy="26" r="3.5"/>
-          <circle cx="70" cy="6" r="3.5"/>
-          <circle cx="118" cy="26" r="3.5"/>
-        </svg>
-        <div class="hero-actions">
-          <a href="contact.html" class="btn btn-primary">Book a Consultation</a>
-          <a href="services.html" class="btn btn-ghost">View Services</a>
+  <section class="ns-hero">
+    <canvas class="ns-net" aria-hidden="true"></canvas>
+    <div class="ns-veil" aria-hidden="true"></div>
+    <div class="ns-vig" aria-hidden="true"></div>
+    <div class="ns-grain" aria-hidden="true"></div>
+    <div class="ns-wrap">
+      <div class="ns-stage">
+        <div class="ns-content">
+          <div class="ns-eyebrow ns-rev ns-d1"><i></i>Agentic AI &middot; Cloud &middot; Strategy</div>
+          <h1 class="ns-head"><span class="ns-w ns-rev ns-d2">Building</span> <span class="ns-w ns-em ns-rev ns-d4">what&rsquo;s next.</span></h1>
+          <p class="ns-sub ns-rev ns-d5">NeoStack partners with growing businesses to modernise infrastructure, migrate to the cloud, and deploy agentic AI &mdash; elegant technology transformation, engineered end to end.</p>
+          <div class="ns-actions ns-rev ns-d6">
+            <a href="contact.html" class="ns-btnp">Book a Consultation<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            <a href="case-studies.html" class="ns-btns"><span class="ns-dot" aria-hidden="true"></span>See Our Work</a>
+          </div>
+          <div class="ns-foot ns-rev ns-d8">
+            <div class="ns-stat"><b>40+</b><span>TRANSFORMATIONS SHIPPED</span></div>
+            <div class="ns-stat"><b>3&times;</b><span>AVG. FASTER DELIVERY</span></div>
+            <div class="ns-stat"><b>SMB</b><span>BUILT FOR GROWTH</span></div>
+          </div>
         </div>
-        <dl class="hero-stats">
-          <div><dt>Clients Served</dt><dd>40+</dd></div>
-          <div><dt>Avg. Infra Cost Cut</dt><dd>28%</dd></div>
-          <div><dt>Uptime SLA</dt><dd>99.95%</dd></div>
-        </dl>
-      </div>
-      <div class="schematic-panel" role="img" aria-label="Abstract system architecture diagram">
-        <svg viewBox="0 0 300 240" aria-hidden="true">
-          <g fill="none" stroke="#1e4fd6" stroke-width="1.6">
-            <rect x="30" y="30" width="70" height="40"/>
-            <rect x="200" y="30" width="70" height="40"/>
-            <rect x="115" y="110" width="70" height="40"/>
-            <rect x="30" y="180" width="70" height="40"/>
-            <rect x="200" y="180" width="70" height="40"/>
-            <path d="M65 70 V110 H115"/>
-            <path d="M235 70 V110 H185"/>
-            <path d="M150 150 V165 M150 165 H65 V180 M150 165 H235 V180"/>
-          </g>
-          <g fill="#b8481f">
-            <circle cx="65" cy="70" r="3"/>
-            <circle cx="235" cy="70" r="3"/>
-            <circle cx="150" cy="165" r="3"/>
-          </g>
-        </svg>
       </div>
     </div>
   </section>
@@ -196,5 +178,6 @@
 </footer>
 
 <script src="js/main.js"></script>
+<script src="js/hero-canvas.js"></script>
 </body>
 </html>
