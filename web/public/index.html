@@ -4,88 +4,122 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Saura AI Workflow — live console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div>
-        <div class="eyebrow">Live console</div>
-        <h1>Saura AI Workflow</h1>
-      </div>
-      <span class="status-badge" id="statusBadge">idle</span>
-    </header>
+  <div class="pg">
+    <div class="grid-bg"></div>
+    <div class="aur aur1"></div>
+    <div class="aur aur2"></div>
 
-    <div class="panel hidden" id="loginPanel">
-      <h2>Login required</h2>
-      <p class="login-note">The page is open to anyone, but starting a run needs a login.</p>
-      <div class="login-form">
-        <input type="text" id="loginUsername" placeholder="Username" autocomplete="username">
-        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
-        <button class="btn primary" id="loginBtn">Log in</button>
-      </div>
-      <p class="login-error hidden" id="loginError">Incorrect username or password.</p>
-    </div>
+    <div class="shell">
+      <nav class="nav rev d0">
+        <div class="brand"><span class="mk"><i></i><i></i><i></i><i></i></span>SAURA AI</div>
+      </nav>
 
-    <div class="panel" id="startPanel">
-      <h2>New run</h2>
-      <div class="start-form">
-        <textarea id="topicInput" placeholder="Topic for the essay, e.g. Green AI frameworks for enterprise data platforms"></textarea>
-        <div class="start-row">
-          <div class="field">
-            <label>Budget cap ($)</label>
-            <input type="number" id="capInput" value="0.20" step="0.05" min="0">
+      <section class="hero">
+        <div class="hcol">
+          <div class="tag rev d1"><i></i>Agentic AI Orchestration</div>
+          <h1 class="h1 rev d2">Agents that research, write, and <span class="g">show their own receipts.</span></h1>
+          <p class="lede rev d3">Saura AI runs a governed pipeline of specialised agents, research, assessment, writing, a responsible AI check, and human approval, with real cost tracked on every step and a live budget cap watching the whole run.</p>
+          <div class="hstats rev d5">
+            <div class="hstat"><b>6</b><span>Governed stages</span></div>
+            <div class="hstat"><b>$0.20</b><span>Default budget cap</span></div>
+            <div class="hstat"><b>100%</b><span>Real, not simulated</span></div>
           </div>
-          <button class="btn primary" id="startBtn">Start run</button>
+        </div>
+        <div class="globe-stage rev d6">
+          <canvas class="globe" id="globeCanvas"></canvas>
+          <div class="gcoord gc1">COST PER STAGE, LIVE</div>
+          <div class="gcoord gc2">CACHE-AWARE</div>
+          <div class="gcoord gc3">COMPRESSED ON HANDOFF</div>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <header>
+        <div>
+          <div class="eyebrow">Live console</div>
+          <h1>Saura AI Workflow</h1>
+        </div>
+        <span class="status-badge" id="statusBadge">idle</span>
+      </header>
+
+      <div class="panel hidden" id="loginPanel">
+        <h2>Login required</h2>
+        <p class="login-note">The page is open to anyone, but starting a run needs a login.</p>
+        <div class="login-form">
+          <input type="text" id="loginUsername" placeholder="Username" autocomplete="username">
+          <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+          <button class="btn primary" id="loginBtn">Log in</button>
+        </div>
+        <p class="login-error hidden" id="loginError">Incorrect username or password.</p>
+      </div>
+
+      <div class="panel" id="startPanel">
+        <h2>New run</h2>
+        <div class="start-form">
+          <textarea id="topicInput" placeholder="Topic for the essay, e.g. Green AI frameworks for enterprise data platforms"></textarea>
+          <div class="start-row">
+            <div class="field">
+              <label>Budget cap ($)</label>
+              <input type="number" id="capInput" value="0.20" step="0.05" min="0">
+            </div>
+            <button class="btn primary" id="startBtn">Start run</button>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="panel" id="meterPanel"></div>
+      <div class="panel" id="meterPanel"></div>
 
-    <div class="panel" id="pipelinePanel">
-      <h2>Pipeline</h2>
-      <div class="pipeline" id="pipeline"></div>
-    </div>
-
-    <div class="panel hidden" id="approvalPanel">
-      <h2>Awaiting your approval</h2>
-      <div class="approval-body" id="approvalEssay"></div>
-      <h2>Responsible AI report</h2>
-      <div class="rai-report" id="approvalRai"></div>
-      <div class="approval-actions">
-        <button class="btn primary" id="approveBtn">Approve</button>
-        <div class="feedback-box">
-          <textarea id="feedbackInput" placeholder="Feedback for a revision (leave blank if approving)"></textarea>
-        </div>
-        <button class="btn" id="reviseBtn">Send back for revision</button>
-        <button class="btn danger" id="stopBtn">Stop</button>
+      <div class="panel" id="pipelinePanel">
+        <h2>Pipeline</h2>
+        <div class="pipeline" id="pipeline"></div>
       </div>
-    </div>
 
-    <div class="panel hidden" id="essayPanel">
-      <h2>Final essay</h2>
-      <div class="essay-panel" id="essayText"></div>
-    </div>
+      <div class="panel hidden" id="approvalPanel">
+        <h2>Awaiting your approval</h2>
+        <div class="approval-body" id="approvalEssay"></div>
+        <h2>Responsible AI report</h2>
+        <div class="rai-report" id="approvalRai"></div>
+        <div class="approval-actions">
+          <button class="btn primary" id="approveBtn">Approve</button>
+          <div class="feedback-box">
+            <textarea id="feedbackInput" placeholder="Feedback for a revision (leave blank if approving)"></textarea>
+          </div>
+          <button class="btn" id="reviseBtn">Send back for revision</button>
+          <button class="btn danger" id="stopBtn">Stop</button>
+        </div>
+      </div>
 
-    <div class="panel hidden" id="explainPanel">
-      <h2>Explanation report</h2>
-      <p class="explain-narrative" id="explainNarrative"></p>
-      <div id="explainGraph"></div>
-      <div id="explainCompression"></div>
-      <div id="explainSources"></div>
-      <div id="explainChart"></div>
-    </div>
+      <div class="panel hidden" id="essayPanel">
+        <h2>Final essay</h2>
+        <div class="essay-panel" id="essayText"></div>
+      </div>
 
-    <div class="panel log-panel">
-      <h2>Activity log</h2>
-      <div class="log-feed" id="logFeed"><div class="log-empty">No run started yet.</div></div>
-    </div>
+      <div class="panel hidden" id="explainPanel">
+        <h2>Explanation report</h2>
+        <p class="explain-narrative" id="explainNarrative"></p>
+        <div id="explainGraph"></div>
+        <div id="explainCompression"></div>
+        <div id="explainSources"></div>
+        <div id="explainChart"></div>
+      </div>
 
-    <footer>Costs computed from real token usage returned by each agent call, priced at Claude Sonnet API list rates ($3 / $15 per million input/output tokens).</footer>
+      <div class="panel log-panel">
+        <h2>Activity log</h2>
+        <div class="log-feed" id="logFeed"><div class="log-empty">No run started yet.</div></div>
+      </div>
+
+      <footer>Costs computed from real token usage returned by each agent call, priced at Claude Sonnet API list rates ($3 / $15 per million input/output tokens).</footer>
+    </div>
   </div>
 
+  <script src="globe.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
