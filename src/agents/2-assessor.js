@@ -16,6 +16,7 @@ export async function assessmentAgent(topic, findings, sources) {
 
   const response = await client.messages.create({
     model: MODEL,
+    routing: true,
     max_tokens: 1500,
     system: `You are an Assessment Agent. You review research findings before they
 are used to write anything. For the findings given to you:

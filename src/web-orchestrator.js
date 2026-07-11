@@ -78,7 +78,7 @@ function buildExplanation(topic, stageLog, sources, handoffCompressions) {
     );
   }
 
-  const routed = stageLog.filter((s) => s.routing && s.routing.tier !== "pinned");
+  const routed = stageLog.filter((s) => s.routing && s.routing.tier !== "pinned" && s.routing.tier !== "capable");
   if (routed.length > 0) {
     const totalRoutingSaved = routed.reduce((sum, s) => sum + (s.routingSavedUsd || 0), 0);
     const parts = routed.map((s) => `${s.label} \u2192 ${s.routing.provider}/${s.routing.model} (${s.routing.tier} tier)`);
@@ -132,7 +132,7 @@ export async function runWebWorkflow(run) {
       // routing.tier is "pinned" for every call that didn't opt into routing -
       // the dashboard uses that to decide whether to show a routing badge at all.
       routing,
-      routingSavedUsd: routing && routing.tier !== "pinned" ? Math.max(0, baselineCost - c) : 0,
+      routingSavedUsd: routing && routing.tier !== "pinned" && routing.tier !== "capable" ? Math.max(0, baselineCost - c) : 0,
     };
     stageLog.push(entry);
     run.emit({ type: "stage-done", ...entry, totalCost: spent });

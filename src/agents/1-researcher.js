@@ -11,6 +11,7 @@ export async function researchAgent(topic) {
 
   const response = await client.messages.create({
     model: MODEL,
+    routing: true,
     max_tokens: 2048,
     system: `You are a Research Agent. Your only job is to gather current, factual
 information on the given topic using web search. Do not write an essay or

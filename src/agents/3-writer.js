@@ -42,6 +42,7 @@ export async function writerAgent(topic, vettedBrief, history = [], revisionNote
 
   const response = await client.messages.create({
     model: MODEL,
+    routing: true,
     max_tokens: 2000,
     system: SYSTEM_PROMPT,
     messages,

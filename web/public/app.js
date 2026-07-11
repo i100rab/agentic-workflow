@@ -112,7 +112,7 @@ function handleEvent(ev) {
       } else {
         const compressionNote = ev.compressionSavedTokens ? ` (compression saved ~${ev.compressionSavedTokens} tok)` : "";
         const routingNote =
-          ev.routing && ev.routing.tier !== "pinned"
+          ev.routing && ev.routing.tier !== "pinned" && ev.routing.tier !== "capable"
             ? ` [routed \u2192 ${ev.routing.provider}/${ev.routing.model}, saved ~${fmtCost(ev.routingSavedUsd || 0)}]`
             : "";
         log(`${ev.label} done \u2014 ${fmtCost(ev.cost)} (${ev.tokensIn} in / ${ev.tokensOut} out)${compressionNote}${routingNote}`);
@@ -184,7 +184,7 @@ function captionFor(s) {
     ? ` Before sending, the prompt was compressed, trimming roughly ${s.compressionSavedTokens} tokens of redundant content.`
     : "";
   const routing =
-    s.routing && s.routing.tier !== "pinned"
+    s.routing && s.routing.tier !== "pinned" && s.routing.tier !== "capable"
       ? ` Routed to ${s.routing.provider}/${s.routing.model} (${s.routing.tier} tier) instead of the default model — saved ~${fmtCost(s.routingSavedUsd || 0)} on this call.`
       : "";
   return base + compression + routing;
@@ -196,7 +196,7 @@ function renderGraph(stageLog, narrative) {
       const cls = s.cacheHit ? "cache-hit" : "real-call";
       const icon = s.cacheHit ? "\u21bb" : "\u2713";
       const routingBadge =
-        s.routing && s.routing.tier !== "pinned"
+        s.routing && s.routing.tier !== "pinned" && s.routing.tier !== "capable"
           ? `<span class="routing-badge routing-${s.routing.tier}">${s.routing.provider}/${s.routing.model}</span>`
           : "";
       return `
