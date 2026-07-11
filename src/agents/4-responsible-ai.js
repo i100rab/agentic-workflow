@@ -14,6 +14,7 @@ export async function responsibleAIAgent(topic, essay) {
 
   const response = await client.messages.create({
     model: MODEL,
+    routing: true,
     max_tokens: 1200,
     system: `You are a Responsible AI review agent. Review the essay below and check for:
 - Claims stated more strongly than the evidence supports (overclaiming)

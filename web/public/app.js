@@ -103,13 +103,19 @@ function handleEvent(ev) {
         tokensOut: ev.tokensOut,
         cacheHit: ev.cacheHit,
         compressionSavedTokens: ev.compressionSavedTokens,
+        routing: ev.routing,
+        routingSavedUsd: ev.routingSavedUsd,
       };
       totalCost = ev.totalCost;
       if (ev.cacheHit) {
         log(`${ev.label} \u2014 cache hit, API call skipped`, "hit");
       } else {
         const compressionNote = ev.compressionSavedTokens ? ` (compression saved ~${ev.compressionSavedTokens} tok)` : "";
-        log(`${ev.label} done \u2014 ${fmtCost(ev.cost)} (${ev.tokensIn} in / ${ev.tokensOut} out)${compressionNote}`);
+        const routingNote =
+          ev.routing && ev.routing.tier !== "pinned"
+            ? ` [routed \u2192 ${ev.routing.provider}/${ev.routing.model}, saved ~${fmtCost(ev.routingSavedUsd || 0)}]`
+            : "";
+        log(`${ev.label} done \u2014 ${fmtCost(ev.cost)} (${ev.tokensIn} in / ${ev.tokensOut} out)${compressionNote}${routingNote}`);
       }
       break;
     case "explanation-ready":
@@ -177,7 +183,11 @@ function captionFor(s) {
   const compression = s.compressionSavedTokens
     ? ` Before sending, the prompt was compressed, trimming roughly ${s.compressionSavedTokens} tokens of redundant content.`
     : "";
-  return base + compression;
+  const routing =
+    s.routing && s.routing.tier !== "pinned"
+      ? ` Routed to ${s.routing.provider}/${s.routing.model} (${s.routing.tier} tier) instead of the default model — saved ~${fmtCost(s.routingSavedUsd || 0)} on this call.`
+      : "";
+  return base + compression + routing;
 }
 
 function renderGraph(stageLog, narrative) {
@@ -185,11 +195,15 @@ function renderGraph(stageLog, narrative) {
     .map((s) => {
       const cls = s.cacheHit ? "cache-hit" : "real-call";
       const icon = s.cacheHit ? "\u21bb" : "\u2713";
+      const routingBadge =
+        s.routing && s.routing.tier !== "pinned"
+          ? `<span class="routing-badge routing-${s.routing.tier}">${s.routing.provider}/${s.routing.model}</span>`
+          : "";
       return `
         <div class="graph-node ${cls}">
           <div class="graph-node-icon">${icon}</div>
           <div class="graph-node-body">
-            <div class="graph-node-title">${s.label}</div>
+            <div class="graph-node-title">${s.label} ${routingBadge}</div>
             <div class="graph-node-caption">${captionFor(s)}</div>
           </div>
         </div>

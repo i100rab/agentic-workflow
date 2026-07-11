@@ -11,13 +11,25 @@ if (!process.env.ANTHROPIC_API_KEY) {
 // caching + compression wrapper instead of the raw SDK client. This is the
 // only line in the whole project that changes - no agent file needs to
 // know or care which mode it's running in.
+//
+// Set ROUTE=true on top of that to additionally enable model routing to
+// OpenAI/Groq for calls that opt in (agents pass `routing: true` on the
+// specific calls where a cheaper model is acceptable - not automatic just
+// because keys exist). Requires OPENAI_API_KEY / GROQ_API_KEY in .env;
+// either can be omitted and routing simply skips tiers it has no key for.
 const optimized = process.env.OPTIMIZE === "true";
+const routingEnabled = process.env.ROUTE === "true";
 
 export const client = optimized
-  ? createOptimizedClient(process.env.ANTHROPIC_API_KEY)
+  ? createOptimizedClient(
+      routingEnabled
+        ? { anthropic: process.env.ANTHROPIC_API_KEY, openai: process.env.OPENAI_API_KEY, groq: process.env.GROQ_API_KEY }
+        : process.env.ANTHROPIC_API_KEY
+    )
   : new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export const IS_OPTIMIZED = optimized;
+export const IS_ROUTING_ENABLED = routingEnabled;
 
 export function getOptimizerStats() {
   return optimized ? client.getStats() : null;

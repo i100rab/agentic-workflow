@@ -24,11 +24,20 @@ budget cap, no meter, no observability layer:
   content removal across a message history, and a sliding window that caps
   how much old context gets resent. All of it operates on message structure
   and text, not on what any specific agent is trying to do.
+- **Model routing** — calls that explicitly opt in (`routing: true` on that
+  call) get classified by a length/structure heuristic into cheap / mid /
+  capable tiers, mapped to Groq Llama 3.1 8B / GPT-4o mini / Claude Sonnet by
+  default. Routing is per-call opt-in, not automatic just because
+  `OPENAI_API_KEY` / `GROQ_API_KEY` exist — a call with no `routing` flag
+  always goes to Anthropic on the model it named, so adding routing to a new
+  agent's calls is a one-line decision per call site, not a pipeline-wide
+  behavior change. See `lib/model-router.js`.
 
 **It's a one-line integration.** `src/client.js` is the only file that
 constructs the Anthropic client; everything else imports it. Setting
 `OPTIMIZE=true` in `.env` routes every agent's calls through the wrapper
-with zero changes to any agent's prompts or logic.
+with zero changes to any agent's prompts or logic. Add `ROUTE=true` on top
+to enable multi-provider routing for calls that opt in.
 
 **Proof it generalizes.** `examples/support-triage/pipeline.js` is a second,
 differently-shaped pipeline (classify → look up policy → draft reply,

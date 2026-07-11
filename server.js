@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import "dotenv/config";
 import { runWebWorkflow } from "./src/web-orchestrator.js";
+import { IS_OPTIMIZED, IS_ROUTING_ENABLED, client } from "./src/client.js";
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error("Missing ANTHROPIC_API_KEY. Copy .env.example to .env and add your key.");
@@ -156,6 +157,17 @@ app.get("/api/runs/:id", requireAuth, (req, res) => {
   const run = runs.get(req.params.id);
   if (!run) return res.status(404).end();
   res.json({ id: run.id, topic: run.topic, cap: run.cap, status: run.status, events: run.events });
+});
+
+app.get("/api/stats", requireAuth, (req, res) => {
+  res.json({
+    optimized: IS_OPTIMIZED,
+    routingEnabled: IS_ROUTING_ENABLED,
+    // client.getStats only exists when OPTIMIZE=true (createOptimizedClient),
+    // not on the raw Anthropic SDK client - guard so this never 500s in
+    // either mode.
+    stats: client.getStats ? client.getStats() : null,
+  });
 });
 
 const PORT = process.env.PORT || 3001;

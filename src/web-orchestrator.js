@@ -3,9 +3,12 @@ import { assessmentAgent } from "./agents/2-assessor.js";
 import { writerAgent } from "./agents/3-writer.js";
 import { responsibleAIAgent } from "./agents/4-responsible-ai.js";
 import { compressHandoff } from "../lib/agent-optimizer.js";
+import { costOfRoutedCall } from "../lib/model-router.js";
 
-// Sonnet list pricing, per token. Used only to turn real usage into a
-// dollar figure for the dashboard - the agents themselves are unchanged.
+// Sonnet list pricing, per token. Used as the baseline every call is
+// compared against - "what would this have cost if routing hadn't moved it
+// to a cheaper model" - as well as the actual cost for calls that stayed on
+// Sonnet (the two are the same number in that case).
 const SONNET_IN = 3 / 1_000_000;
 const SONNET_OUT = 15 / 1_000_000;
 const MAX_REVISIONS = 2;
@@ -13,6 +16,16 @@ const MAX_REVISIONS = 2;
 function costOf(usage) {
   if (!usage) return 0;
   return (usage.input_tokens || 0) * SONNET_IN + (usage.output_tokens || 0) * SONNET_OUT;
+}
+
+// What was actually spent, given which model really served the call. Without
+// this, a call routed to Groq would still be priced at Sonnet rates on the
+// dashboard - correct token count, wrong dollar figure, and routing's real
+// savings would never show up anywhere.
+function realCostOf(usage, routing) {
+  if (!usage) return 0;
+  if (!routing || routing.tier === "pinned") return costOf(usage);
+  return costOfRoutedCall(routing.model, usage);
 }
 
 /**
@@ -65,6 +78,17 @@ function buildExplanation(topic, stageLog, sources, handoffCompressions) {
     );
   }
 
+  const routed = stageLog.filter((s) => s.routing && s.routing.tier !== "pinned");
+  if (routed.length > 0) {
+    const totalRoutingSaved = routed.reduce((sum, s) => sum + (s.routingSavedUsd || 0), 0);
+    const parts = routed.map((s) => `${s.label} \u2192 ${s.routing.provider}/${s.routing.model} (${s.routing.tier} tier)`);
+    lines.push(
+      `${routed.length} call(s) were routed to a cheaper model instead of the default: ${parts.join(
+        ", "
+      )}. That saved roughly $${totalRoutingSaved.toFixed(4)} compared to running those same calls on Sonnet.`
+    );
+  }
+
   return { narrative: lines.join(" "), stageLog: [...stageLog], sources, handoffCompressions };
 }
 
@@ -93,8 +117,10 @@ export async function runWebWorkflow(run) {
   let sourcesUsed = [];
 
   function record(stage, label, usage, optimizerMeta) {
-    const c = costOf(usage);
+    const routing = optimizerMeta?.routing || null;
+    const c = realCostOf(usage, routing);
     spent += c;
+    const baselineCost = usage ? costOf(usage) : 0; // what it would've cost on Sonnet
     const entry = {
       stage,
       label,
@@ -103,6 +129,10 @@ export async function runWebWorkflow(run) {
       tokensOut: usage?.output_tokens || 0,
       cacheHit: optimizerMeta?.cacheHit || false,
       compressionSavedTokens: optimizerMeta?.tokensSavedByCompression || 0,
+      // routing.tier is "pinned" for every call that didn't opt into routing -
+      // the dashboard uses that to decide whether to show a routing badge at all.
+      routing,
+      routingSavedUsd: routing && routing.tier !== "pinned" ? Math.max(0, baselineCost - c) : 0,
     };
     stageLog.push(entry);
     run.emit({ type: "stage-done", ...entry, totalCost: spent });
